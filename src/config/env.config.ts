@@ -6,8 +6,8 @@ export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
 
   DATABASE_URL: Joi.string().required(),
-  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
-  JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+  JWT_ACCESS_SECRET: Joi.string().default('fallback-jwt-access-secret-servizein-2026-change-me'),
+  JWT_REFRESH_SECRET: Joi.string().default('fallback-jwt-refresh-secret-servizein-2026-change-me'),
 
   // ─── Optional with defaults ──────────────────────────────────────────────
   JWT_ACCESS_EXPIRES: Joi.string().default('15m'),
