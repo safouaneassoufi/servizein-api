@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 railway-vars.txt
+RAILWAY_VARS.txt
 .env.local
 .env.production
 prisma/dev.db
