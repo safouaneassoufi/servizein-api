@@ -1,0 +1,383 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CLIENT
+  PROVIDER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum KycStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DocumentType {
+  ID_CARD
+  PASSPORT
+  PROOF_OF_ADDRESS
+  PROFESSIONAL_CERT
+  OTHER
+}
+
+enum PriceType {
+  FIXED
+  QUOTE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum BookingSource {
+  DIRECT
+  REQUEST
+}
+
+enum PaymentMethod {
+  CASH
+  CARD_ON_SITE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_COMPLETED
+  KYC_APPROVED
+  KYC_REJECTED
+  NEW_MESSAGE
+  QUOTE_RECEIVED
+  GENERAL
+}
+
+enum FeeType {
+  PERCENTAGE
+  FIXED
+}
+
+enum AvailabilityType {
+  RECURRING
+  EXCEPTION
+}
+
+enum RequestStatus {
+  OPEN
+  QUOTED
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+enum OfferStatus {
+  PENDING
+  SEEN
+  COUNTER_OFFERED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+// ─── MODELS ──────────────────────────────────────────────────────────────────
+
+model UserAccount {
+  id              String     @id @default(cuid())
+  phone           String     @unique
+  email           String?    @unique
+  passwordHash    String
+  name            String
+  avatarUrl       String?
+  roles           String[]   @default(["CLIENT"])
+  status          UserStatus @default(PENDING_VERIFICATION)
+  phoneVerified   Boolean    @default(false)
+  emailVerified   Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  addresses       Address[]
+  providerAccount ProviderAccount?
+  clientBookings  Booking[]        @relation("ClientBookings")
+  notifications   Notification[]
+  favorites       Favorite[]
+  serviceRequests ServiceRequest[]
+  pushTokens      PushToken[]
+
+  @@map("user_accounts")
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+  line1       String
+  line2       String?
+  city        String
+  postalCode  String?
+  latitude    Float?
+  longitude   Float?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user          UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings      Booking[]
+
+  @@map("addresses")
+}
+
+model ProviderAccount {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  bio             String?
+  experience      Int       @default(0)
+  kycStatus       KycStatus @default(PENDING)
+  kycRejectionNote String?
+  verified        Boolean   @default(false)
+  available       Boolean   @default(false)
+  city            String?
+  zone            String?
+  averageRating   Float     @default(0)
+  reviewCount     Int       @default(0)
+  completedJobs   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user          UserAccount        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents     ProviderDocument[]
+  services      Service[]
+  availability  Availability[]
+  bookings      Booking[]          @relation("ProviderBookings")
+  favorites     Favorite[]
+  offers        Offer[]
+
+  @@map("provider_accounts")
+}
+
+model ProviderDocument {
+  id           String       @id @default(cuid())
+  providerId   String
+  type         DocumentType
+  fileUrl      String
+  fileKey      String
+  reviewedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  provider ProviderAccount @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("provider_documents")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  icon        String?
+  imageUrl    String?
+  description String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  services        Service[]
+  feeConfig       FeeConfig[]
+  serviceRequests ServiceRequest[]
+
+  @@map("categories")
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  categoryId  String
+  providerId  String?
+  name        String
+  description String?
+  priceType   PriceType
+  price       Float?
+  duration    Int?      // minutes
+  imageUrl    String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  category Category        @relation(fields: [categoryId], references: [id])
+  provider ProviderAccount? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@map("services")
+}
+
+model Availability {
+  id         String           @id @default(cuid())
+  providerId String
+  type       AvailabilityType
+  dayOfWeek  Int?             // 0-6 for RECURRING
+  date       DateTime?        // for EXCEPTION
+  startTime  String?          // "HH:mm"
+  endTime    String?          // "HH:mm"
+  isOff      Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  provider ProviderAccount @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("availabilities")
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  clientId        String
+  providerId      String
+  serviceId       String
+  addressId       String
+  source          BookingSource @default(DIRECT)
+  status          BookingStatus @default(PENDING)
+  scheduledDate   DateTime
+  scheduledSlot   String        // "HH:mm"
+  originalPrice   Float
+  negotiatedPrice Float?
+  finalPrice      Float
+  platformFee     Float
+  totalAmount     Float
+  paymentMethod   PaymentMethod @default(CASH)
+  paymentStatus   PaymentStatus @default(PENDING)
+  clientNote      String?
+  providerNote    String?
+  cancelReason    String?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  client    UserAccount     @relation("ClientBookings", fields: [clientId], references: [id])
+  provider  ProviderAccount @relation("ProviderBookings", fields: [providerId], references: [id])
+  service   Service         @relation(fields: [serviceId], references: [id])
+  address   Address         @relation(fields: [addressId], references: [id])
+
+  @@map("bookings")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model FeeConfig {
+  id          String   @id @default(cuid())
+  categoryId  String?
+  feeType     FeeType  @default(PERCENTAGE)
+  value       Float    @default(5)
+  minFee      Float?   @default(10)
+  maxFee      Float?   @default(50)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  @@map("fee_configs")
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  providerId String
+  createdAt  DateTime @default(now())
+
+  user     UserAccount     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider ProviderAccount @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId])
+  @@map("favorites")
+}
+
+model ServiceRequest {
+  id          String        @id @default(cuid())
+  clientId    String
+  categoryId  String
+  description String
+  photoUrls   String[]      @default([])
+  status      RequestStatus @default(OPEN)
+  city        String?
+  expiresAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  client   UserAccount @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category Category    @relation(fields: [categoryId], references: [id])
+  offers   Offer[]
+
+  @@map("service_requests")
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  user UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_tokens")
+}
+
+model Offer {
+  id             String      @id @default(cuid())
+  requestId      String
+  providerId     String
+  price          Float
+  message        String?
+  proposedDate   DateTime?
+  proposedSlot   String?     // "HH:mm"
+  estimatedHours Float?
+  validUntil     DateTime?
+  status         OfferStatus @default(PENDING)
+  counterPrice   Float?
+  counterMessage String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  request  ServiceRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider ProviderAccount @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, providerId])
+  @@map("offers")
+}
