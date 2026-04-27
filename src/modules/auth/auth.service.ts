@@ -401,7 +401,11 @@ export class AuthService {
       },
     );
 
-    await this.redis.set(`refresh:${userId}:${jti}`, '1', REFRESH_TTL_SECONDS);
+    try {
+      await this.redis.set(`refresh:${userId}:${jti}`, '1', REFRESH_TTL_SECONDS);
+    } catch {
+      // Redis unavailable — access token still works; refresh token won't persist
+    }
 
     return { accessToken, refreshToken };
   }
