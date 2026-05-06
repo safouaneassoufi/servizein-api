@@ -6,7 +6,7 @@ export class RegisterDto {
   name: string;
 
   @IsString()
-  @Matches(/^\+212[0-9]{9}$/, { message: 'Phone must be in format +212XXXXXXXXX' })
+  @Matches(/^\+[1-9]\d{6,14}$/, { message: 'Phone must be in E.164 format (e.g. +212612345678)' })
   phone: string;
 
   @IsEmail()
