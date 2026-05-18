@@ -77,17 +77,23 @@ export class AuthService {
   }
 
   async sendOtp(phone: string) {
-    const rateKey = `otp_rate:${phone}`;
-    const count = await this.redis.incr(rateKey);
-    if (count === 1) {
-      await this.redis.expire(rateKey, OTP_WINDOW_SECONDS);
-    }
-    if (count > OTP_RATE_LIMIT) {
-      const ttl = await this.redis.ttl(rateKey);
-      throw new HttpException(
-        `Too many OTP requests. Try again in ${Math.ceil(ttl / 60)} minutes.`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+    // Rate limiting — best-effort: skip if Redis unavailable
+    try {
+      const rateKey = `otp_rate:${phone}`;
+      const count = await this.redis.incr(rateKey);
+      if (count === 1) {
+        await this.redis.expire(rateKey, OTP_WINDOW_SECONDS);
+      }
+      if (count > OTP_RATE_LIMIT) {
+        const ttl = await this.redis.ttl(rateKey);
+        throw new HttpException(
+          `Too many OTP requests. Try again in ${Math.ceil(ttl / 60)} minutes.`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    } catch (e) {
+      if (e instanceof HttpException) throw e;
+      // Redis unavailable — allow OTP send anyway
     }
     await this.otp.sendOtp(phone);
     return { message: 'OTP sent' };

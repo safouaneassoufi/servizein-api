@@ -2,13 +2,13 @@ import { IsString, Matches } from 'class-validator';
 
 export class SendOtpDto {
   @IsString()
-  @Matches(/^\+212[0-9]{9}$/, { message: 'Phone must be in format +212XXXXXXXXX' })
+  @Matches(/^\+[1-9]\d{6,14}$/, { message: 'Phone must be in E.164 format (e.g. +33612345678)' })
   phone: string;
 }
 
 export class VerifyOtpDto {
   @IsString()
-  @Matches(/^\+212[0-9]{9}$/, { message: 'Phone must be in format +212XXXXXXXXX' })
+  @Matches(/^\+[1-9]\d{6,14}$/, { message: 'Phone must be in E.164 format (e.g. +33612345678)' })
   phone: string;
 
   @IsString()
