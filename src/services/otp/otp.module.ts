@@ -3,7 +3,7 @@ import { OtpService } from './otp.service';
 
 @Global()
 @Module({
-  providers: [OtpService],
+  providers: [OtpService],  // RedisService retiré — OTP fixe sans Redis
   exports: [OtpService],
 })
 export class OtpModule {}
