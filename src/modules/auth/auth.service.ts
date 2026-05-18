@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ConflictException,
   UnauthorizedException,
   BadRequestException,
@@ -40,6 +41,8 @@ const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -61,18 +64,31 @@ export class AuthService {
     if (existing) throw new ConflictException('Phone or email already in use');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.prisma.userAccount.create({
-      data: {
-        phone: dto.phone,
-        email: dto.email,
-        name: dto.name,
-        passwordHash,
-        roles: ['CLIENT'],
-        status: 'PENDING_VERIFICATION',
-      },
-    });
 
-    await this.sendOtp(dto.phone);
+    let user: any;
+    try {
+      user = await this.prisma.userAccount.create({
+        data: {
+          phone: dto.phone,
+          email: dto.email ?? null,
+          name: dto.name,
+          passwordHash,
+          roles: ['CLIENT'],
+          status: 'PENDING_VERIFICATION',
+        },
+      });
+    } catch (e: any) {
+      this.logger.error('prisma.create error: ' + (e?.message ?? e));
+      throw new HttpException('Erreur création compte: ' + (e?.message ?? 'DB error'), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    try {
+      await this.sendOtp(dto.phone);
+    } catch (e: any) {
+      this.logger.error('sendOtp error: ' + (e?.message ?? e));
+      // Ne pas bloquer l'inscription si l'OTP échoue
+    }
+
     return { message: 'OTP sent', userId: user.id };
   }
 
